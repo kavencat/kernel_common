@@ -391,7 +391,7 @@ static struct iovec *__io_import_iovec(int ddir, struct io_kiocb *req,
 			rw->len = sqe_len;
 		}
 
-		ret = import_single_range(ddir, buf, sqe_len, s->fast_iov, iter);
+		ret = import_ubuf(ddir, buf, sqe_len, iter);
 		if (ret)
 			return ERR_PTR(ret);
 		return NULL;
@@ -447,23 +447,25 @@ static ssize_t loop_rw_iter(int ddir, struct io_rw *rw, struct iov_iter *iter)
 	ppos = io_kiocb_ppos(kiocb);
 
 	while (iov_iter_count(iter)) {
-		struct iovec iovec;
+		void __user *addr;
+		size_t len;
 		ssize_t nr;
 
-		if (!iov_iter_is_bvec(iter)) {
-			iovec = iov_iter_iovec(iter);
+		if (iter_is_ubuf(iter)) {
+			addr = iter->ubuf + iter->iov_offset;
+			len = iov_iter_count(iter);
+		} else if (!iov_iter_is_bvec(iter)) {
+			addr = iter_iov_addr(iter);
+			len = iter_iov_len(iter);
 		} else {
-			iovec.iov_base = u64_to_user_ptr(rw->addr);
-			iovec.iov_len = rw->len;
+			addr = u64_to_user_ptr(rw->addr);
+			len = rw->len;
 		}
 
-		if (ddir == READ) {
-			nr = file->f_op->read(file, iovec.iov_base,
-					      iovec.iov_len, ppos);
-		} else {
-			nr = file->f_op->write(file, iovec.iov_base,
-					       iovec.iov_len, ppos);
-		}
+		if (ddir == READ)
+			nr = file->f_op->read(file, addr, len, ppos);
+		else
+			nr = file->f_op->write(file, addr, len, ppos);
 
 		if (nr < 0) {
 			if (!ret)
@@ -479,7 +481,7 @@ static ssize_t loop_rw_iter(int ddir, struct io_rw *rw, struct iov_iter *iter)
 			if (!rw->len)
 				break;
 		}
-		if (nr != iovec.iov_len)
+		if (nr != len)
 			break;
 	}
 
@@ -495,15 +497,15 @@ static void io_req_map_rw(struct io_kiocb *req, const struct iovec *iovec,
 	io->free_iovec = iovec;
 	io->bytes_done = 0;
 	/* can only be fixed buffers, no need to do anything */
-	if (iov_iter_is_bvec(iter))
+	if (iov_iter_is_bvec(iter) || iter_is_ubuf(iter))
 		return;
 	if (!iovec) {
 		unsigned iov_off = 0;
 
-		io->s.iter.iov = io->s.fast_iov;
-		if (iter->iov != fast_iov) {
-			iov_off = iter->iov - fast_iov;
-			io->s.iter.iov += iov_off;
+		io->s.iter.__iov = io->s.fast_iov;
+		if (iter->__iov != fast_iov) {
+			iov_off = iter_iov(iter) - fast_iov;
+			io->s.iter.__iov += iov_off;
 		}
 		if (io->s.fast_iov != fast_iov)
 			memcpy(io->s.fast_iov + iov_off, fast_iov + iov_off,

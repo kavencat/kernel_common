@@ -1459,11 +1459,11 @@ EXPORT_SYMBOL(follow_down_one);
  * point, the filesystem owning that dentry may be queried as to whether the
  * caller is permitted to proceed or not.
  */
-int follow_down(struct path *path)
+int follow_down(struct path *path, unsigned int flags)
 {
 	struct vfsmount *mnt = path->mnt;
 	bool jumped;
-	int ret = traverse_mounts(path, &jumped, NULL, 0);
+	int ret = traverse_mounts(path, &jumped, NULL, flags);
 
 	if (path->mnt != mnt)
 		mntput(mnt);
@@ -2865,7 +2865,7 @@ int path_pts(struct path *path)
 
 	path->dentry = child;
 	dput(parent);
-	follow_down(path);
+	follow_down(path, 0);
 	return 0;
 }
 #endif
@@ -3574,9 +3574,9 @@ static int do_open(struct nameidata *nd,
 /**
  * vfs_tmpfile - create tmpfile
  * @idmap:	idmap of the mount the inode was found from
- * @dentry:	pointer to dentry of the base directory
+ * @parentpath:	pointer to the path of the base directory
+ * @file:	file descriptor of the new tmpfile
  * @mode:	mode of the new tmpfile
- * @open_flag:	flags
  *
  * Create a temporary file.
  *

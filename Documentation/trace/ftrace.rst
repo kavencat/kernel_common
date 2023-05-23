@@ -830,10 +830,10 @@ Error conditions
   The extended error information and usage takes the form shown in
   this example::
 
-    # echo xxx > /sys/kernel/debug/tracing/events/sched/sched_wakeup/trigger
+    # echo xxx > /sys/kernel/tracing/events/sched/sched_wakeup/trigger
     echo: write error: Invalid argument
 
-    # cat /sys/kernel/debug/tracing/error_log
+    # cat /sys/kernel/tracing/error_log
     [ 5348.887237] location: error: Couldn't yyy: zzz
       Command: xxx
                ^
@@ -843,7 +843,7 @@ Error conditions
 
   To clear the error log, echo the empty string into it::
 
-    # echo > /sys/kernel/debug/tracing/error_log
+    # echo > /sys/kernel/tracing/error_log
 
 Examples of using the tracer
 ----------------------------
@@ -3510,7 +3510,7 @@ directories, the rmdir will fail with EBUSY.
 Stack trace
 -----------
 Since the kernel has a fixed sized stack, it is important not to
-waste it in functions. A kernel developer must be conscience of
+waste it in functions. A kernel developer must be conscious of
 what they allocate on the stack. If they add too much, the system
 can be in danger of a stack overflow, and corruption will occur,
 usually leading to a system panic.
