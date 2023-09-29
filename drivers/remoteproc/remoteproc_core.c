@@ -38,6 +38,7 @@
 #include <linux/virtio_ring.h>
 #include <asm/byteorder.h>
 #include <linux/platform_device.h>
+#include <trace/hooks/remoteproc.h>
 
 #include "remoteproc_internal.h"
 
@@ -1891,6 +1892,8 @@ static void rproc_crash_handler_work(struct work_struct *work)
 		rproc_trigger_recovery(rproc);
 
 out:
+	trace_android_vh_rproc_recovery(rproc);
+
 	pm_relax(rproc->dev.parent);
 }
 
@@ -2766,5 +2769,4 @@ static void __exit remoteproc_exit(void)
 }
 module_exit(remoteproc_exit);
 
-MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Generic Remote Processor Framework");

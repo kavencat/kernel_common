@@ -919,10 +919,10 @@ static long ioctl_get_read_timeouts(struct mount_info *mi, void __user *arg)
 	if (copy_from_user(&args, args_usr_ptr, sizeof(args)))
 		return -EINVAL;
 
-	if (args.timeouts_array_size_out > INCFS_DATA_FILE_BLOCK_SIZE)
+	if (args.timeouts_array_size > INCFS_DATA_FILE_BLOCK_SIZE)
 		return -EINVAL;
 
-	buffer = kzalloc(args.timeouts_array_size_out, GFP_NOFS);
+	buffer = kzalloc(args.timeouts_array_size, GFP_NOFS);
 	if (!buffer)
 		return -ENOMEM;
 
@@ -1303,9 +1303,7 @@ static bool get_pseudo_inode(int ino, struct inode *inode)
 	if (i == ARRAY_SIZE(incfs_pseudo_file_inodes))
 		return false;
 
-	inode->i_ctime = (struct timespec64){};
-	inode->i_mtime = inode->i_ctime;
-	inode->i_atime = inode->i_ctime;
+	inode->i_mtime = inode->i_atime = inode_set_ctime(inode, 0, 0);
 	inode->i_size = 0;
 	inode->i_ino = ino;
 	inode->i_private = NULL;

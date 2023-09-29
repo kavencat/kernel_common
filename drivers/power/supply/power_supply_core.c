@@ -355,6 +355,10 @@ static int __power_supply_is_system_supplied(struct device *dev, void *data)
 	struct power_supply *psy = dev_get_drvdata(dev);
 	unsigned int *count = data;
 
+	if (!psy->desc->get_property(psy, POWER_SUPPLY_PROP_SCOPE, &ret))
+		if (ret.intval == POWER_SUPPLY_SCOPE_DEVICE)
+			return 0;
+
 	(*count)++;
 	if (psy->desc->type != POWER_SUPPLY_TYPE_BATTERY)
 		if (!psy->desc->get_property(psy, POWER_SUPPLY_PROP_ONLINE,
@@ -373,8 +377,8 @@ int power_supply_is_system_supplied(void)
 				      __power_supply_is_system_supplied);
 
 	/*
-	 * If no power class device was found at all, most probably we are
-	 * running on a desktop system, so assume we are on mains power.
+	 * If no system scope power class device was found at all, most probably we
+	 * are running on a desktop system, so assume we are on mains power.
 	 */
 	if (count == 0)
 		return 1;
@@ -651,7 +655,7 @@ int power_supply_get_battery_info(struct power_supply *psy,
 	struct power_supply_battery_info *info;
 	struct device_node *battery_np = NULL;
 	struct fwnode_reference_args args;
-	struct fwnode_handle *fwnode;
+	struct fwnode_handle *fwnode = NULL;
 	const char *value;
 	int err, len, index;
 	const __be32 *list;
@@ -663,7 +667,7 @@ int power_supply_get_battery_info(struct power_supply *psy,
 			return -ENODEV;
 
 		fwnode = fwnode_handle_get(of_fwnode_handle(battery_np));
-	} else {
+	} else if (psy->dev.parent) {
 		err = fwnode_property_get_reference_args(
 					dev_fwnode(psy->dev.parent),
 					"monitored-battery", NULL, 0, 0, &args);
@@ -672,6 +676,9 @@ int power_supply_get_battery_info(struct power_supply *psy,
 
 		fwnode = args.fwnode;
 	}
+
+	if (!fwnode)
+		return -ENOENT;
 
 	err = fwnode_property_read_string(fwnode, "compatible", &value);
 	if (err)
@@ -1220,7 +1227,7 @@ static int power_supply_read_temp(struct thermal_zone_device *tzd,
 	int ret;
 
 	WARN_ON(tzd == NULL);
-	psy = tzd->devdata;
+	psy = thermal_zone_device_priv(tzd);
 	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_TEMP, &val);
 	if (ret)
 		return ret;
@@ -1540,7 +1547,7 @@ EXPORT_SYMBOL_GPL(power_supply_get_drvdata);
 
 static int __init power_supply_class_init(void)
 {
-	power_supply_class = class_create(THIS_MODULE, "power_supply");
+	power_supply_class = class_create("power_supply");
 
 	if (IS_ERR(power_supply_class))
 		return PTR_ERR(power_supply_class);
@@ -1563,4 +1570,3 @@ MODULE_DESCRIPTION("Universal power supply monitor class");
 MODULE_AUTHOR("Ian Molton <spyro@f2s.com>, "
 	      "Szabolcs Gyurko, "
 	      "Anton Vorontsov <cbou@mail.ru>");
-MODULE_LICENSE("GPL");

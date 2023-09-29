@@ -23,7 +23,6 @@
 #include <linux/smp.h>
 #include <linux/pm_qos.h>
 #include <linux/pm_runtime.h>
-#include <linux/aer.h>
 #include <linux/prefetch.h>
 #include <linux/suspend.h>
 
@@ -4199,7 +4198,7 @@ void e1000e_reset(struct e1000_adapter *adapter)
 
 /**
  * e1000e_trigger_lsc - trigger an LSC interrupt
- * @adapter: 
+ * @adapter: board private structure
  *
  * Fire a link status change interrupt to start the watchdog.
  **/
