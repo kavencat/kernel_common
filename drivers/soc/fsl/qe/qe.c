@@ -25,7 +25,8 @@
 #include <linux/iopoll.h>
 #include <linux/crc32.h>
 #include <linux/mod_devicetable.h>
-#include <linux/of_platform.h>
+#include <linux/of.h>
+#include <linux/platform_device.h>
 #include <soc/fsl/qe/immap_qe.h>
 #include <soc/fsl/qe/qe.h>
 
@@ -429,7 +430,7 @@ static void qe_upload_microcode(const void *base,
 /*
  * Upload a microcode to the I-RAM at a specific address.
  *
- * See Documentation/powerpc/qe_firmware.rst for information on QE microcode
+ * See Documentation/arch/powerpc/qe_firmware.rst for information on QE microcode
  * uploading.
  *
  * Currently, only version 1 is supported, so the 'version' field must be

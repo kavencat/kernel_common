@@ -68,7 +68,7 @@ DECLARE_RESTRICTED_HOOK(android_rvh_get_nohz_timer_target,
 	TP_PROTO(int *cpu, bool *done),
 	TP_ARGS(cpu, done), 1);
 
-DECLARE_RESTRICTED_HOOK(android_rvh_set_user_nice,
+DECLARE_RESTRICTED_HOOK(android_rvh_set_user_nice_locked,
 	TP_PROTO(struct task_struct *p, long *nice, bool *allowed),
 	TP_ARGS(p, nice, allowed), 1);
 
@@ -246,6 +246,14 @@ DECLARE_HOOK(android_vh_update_topology_flags_workfn,
 DECLARE_RESTRICTED_HOOK(android_rvh_update_thermal_stats,
 		TP_PROTO(int cpu),
 		TP_ARGS(cpu), 1);
+
+DECLARE_HOOK(android_vh_do_wake_up_sync,
+	TP_PROTO(struct wait_queue_head *wq_head, int *done, struct sock *sk),
+	TP_ARGS(wq_head, done, sk));
+
+DECLARE_HOOK(android_vh_set_wake_flags,
+	TP_PROTO(int *wake_flags, unsigned int *mode),
+	TP_ARGS(wake_flags, mode));
 
 /* macro versions of hooks are no longer required */
 

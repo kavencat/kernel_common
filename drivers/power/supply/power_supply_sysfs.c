@@ -15,6 +15,7 @@
 #include <linux/power_supply.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
+#include <linux/string_helpers.h>
 
 #include "power_supply.h"
 
@@ -395,14 +396,6 @@ static const struct attribute_group *power_supply_attr_groups[] = {
 	NULL,
 };
 
-static void str_to_lower(char *str)
-{
-	while (*str) {
-		*str = tolower(*str);
-		str++;
-	}
-}
-
 void power_supply_init_attrs(struct device_type *dev_type)
 {
 	int i;
@@ -417,7 +410,8 @@ void power_supply_init_attrs(struct device_type *dev_type)
 				__func__, i);
 			sprintf(power_supply_attrs[i].attr_name, "_err_%d", i);
 		} else {
-			str_to_lower(power_supply_attrs[i].attr_name);
+			string_lower(power_supply_attrs[i].attr_name,
+				     power_supply_attrs[i].attr_name);
 		}
 
 		attr = &power_supply_attrs[i].dev_attr;
@@ -474,6 +468,13 @@ int power_supply_uevent(const struct device *dev, struct kobj_uevent_env *env)
 	ret = add_uevent_var(env, "POWER_SUPPLY_NAME=%s", psy->desc->name);
 	if (ret)
 		return ret;
+
+	/*
+	 * Kernel generates KOBJ_REMOVE uevent in device removal path, after
+	 * resources have been freed. Exit early to avoid use-after-free.
+	 */
+	if (psy->removing)
+		return 0;
 
 	prop_buf = (char *)get_zeroed_page(GFP_KERNEL);
 	if (!prop_buf)

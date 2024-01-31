@@ -271,6 +271,9 @@ int __init cma_declare_contiguous_nid(phys_addr_t base,
 	if (alignment && !is_power_of_2(alignment))
 		return -EINVAL;
 
+	if (!IS_ENABLED(CONFIG_NUMA))
+		nid = NUMA_NO_NODE;
+
 	/* Sanitise input arguments. */
 	alignment = max_t(phys_addr_t, alignment, CMA_MIN_ALIGNMENT_BYTES);
 	if (fixed && base & (alignment - 1)) {
@@ -376,14 +379,15 @@ int __init cma_declare_contiguous_nid(phys_addr_t base,
 	if (ret)
 		goto free_mem;
 
-	pr_info("Reserved %ld MiB at %pa\n", (unsigned long)size / SZ_1M,
-		&base);
+	pr_info("Reserved %ld MiB at %pa on node %d\n", (unsigned long)size / SZ_1M,
+		&base, nid);
 	return 0;
 
 free_mem:
 	memblock_phys_free(base, size);
 err:
-	pr_err("Failed to reserve %ld MiB\n", (unsigned long)size / SZ_1M);
+	pr_err("Failed to reserve %ld MiB on node %d\n", (unsigned long)size / SZ_1M,
+	       nid);
 	return ret;
 }
 
@@ -417,17 +421,18 @@ static inline void cma_debug_show_areas(struct cma *cma) { }
 #endif
 
 /**
- * cma_alloc() - allocate pages from contiguous area
+ * __cma_alloc() - allocate pages from contiguous area
  * @cma:   Contiguous memory region for which the allocation is performed.
  * @count: Requested number of pages.
  * @align: Requested alignment of pages (in PAGE_SIZE order).
- * @no_warn: Avoid printing message about failed allocation
+ * @gfp_mask: GFP mask to use during the cma allocation.
  *
- * This function allocates part of contiguous memory on specific
- * contiguous memory area.
+ * This function is same with cma_alloc but supports gfp_mask.
+ * Currently, the gfp_mask supports only __GFP_NOWARN and __GFP_NORETRY.
+ * If user passes other flags, it fails the allocation.
  */
-struct page *cma_alloc(struct cma *cma, unsigned long count,
-		       unsigned int align, bool no_warn)
+struct page *__cma_alloc(struct cma *cma, unsigned long count,
+		       unsigned int align, gfp_t gfp_mask)
 {
 	unsigned long mask, offset;
 	unsigned long pfn = -1;
@@ -439,11 +444,15 @@ struct page *cma_alloc(struct cma *cma, unsigned long count,
 	int num_attempts = 0;
 	int max_retries = 5;
 
+	if (WARN_ON_ONCE((gfp_mask & GFP_KERNEL) == 0 ||
+		(gfp_mask & ~(GFP_KERNEL|__GFP_NOWARN|__GFP_NORETRY)) != 0))
+		goto out;
+
 	if (!cma || !cma->count || !cma->bitmap)
 		goto out;
 
-	pr_debug("%s(cma %p, count %lu, align %d)\n", __func__, (void *)cma,
-		 count, align);
+	pr_debug("%s(cma %p, name: %s, count %lu, align %d)\n", __func__,
+		(void *)cma, cma->name, count, align);
 
 	if (!count)
 		goto out;
@@ -467,7 +476,8 @@ struct page *cma_alloc(struct cma *cma, unsigned long count,
 			if ((num_attempts < max_retries) && (ret == -EBUSY)) {
 				spin_unlock_irq(&cma->lock);
 
-				if (fatal_signal_pending(current))
+				if (fatal_signal_pending(current) ||
+				    (gfp_mask & __GFP_NORETRY))
 					break;
 
 				/*
@@ -497,8 +507,7 @@ struct page *cma_alloc(struct cma *cma, unsigned long count,
 
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
 		mutex_lock(&cma_mutex);
-		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA,
-				     GFP_KERNEL | (no_warn ? __GFP_NOWARN : 0));
+		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA, gfp_mask);
 		mutex_unlock(&cma_mutex);
 		if (ret == 0) {
 			page = pfn_to_page(pfn);
@@ -527,10 +536,10 @@ struct page *cma_alloc(struct cma *cma, unsigned long count,
 	 */
 	if (page) {
 		for (i = 0; i < count; i++)
-			page_kasan_tag_reset(page + i);
+			page_kasan_tag_reset(nth_page(page, i));
 	}
 
-	if (ret && !no_warn) {
+	if (ret && !(gfp_mask & __GFP_NOWARN)) {
 		pr_err_ratelimited("%s: %s: alloc failed, req-size: %lu pages, ret: %d\n",
 				   __func__, cma->name, count, ret);
 		cma_debug_show_areas(cma);
@@ -548,6 +557,24 @@ out:
 	}
 
 	return page;
+}
+EXPORT_SYMBOL_GPL(__cma_alloc);
+
+/**
+ * cma_alloc() - allocate pages from contiguous area
+ * @cma:   Contiguous memory region for which the allocation is performed.
+ * @count: Requested number of pages.
+ * @align: Requested alignment of pages (in PAGE_SIZE order).
+ * @no_warn: Avoid printing message about failed allocation
+ *
+ * This function allocates part of contiguous memory on specific
+ * contiguous memory area.
+ */
+struct page *cma_alloc(struct cma *cma, unsigned long count,
+		       unsigned int align, bool no_warn)
+{
+	return __cma_alloc(cma, count, align, GFP_KERNEL |
+				(no_warn ? __GFP_NOWARN : 0));
 }
 EXPORT_SYMBOL_GPL(cma_alloc);
 
